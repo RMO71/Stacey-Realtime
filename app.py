@@ -53,6 +53,7 @@ df = df[col_order]
 
 st.subheader("Edit data (1–9)")
 edited = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+edited.columns = edited.columns.str.strip()
 
 missing = ["Country/Market","MarketSize_Units"]
 missing += [c for c in pref_cols if c not in edited.columns]
