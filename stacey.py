@@ -3,14 +3,14 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import pandas as pd
 
-# Band edges used on both axes
+# Band edges on both axes
 CUTS = [0, 3, 6, 8, 9]
 
-# Colors (tuned to your reference)
-COL_YELLOW = "#FFE49C"  # 0–3 × 0–3
-COL_BLUE   = "#C6D7EE"  # 3–6 cross
-COL_GREEN  = "#CDEAC0"  # full 6–9 bands (both axes)
-COL_RED    = "#FFC9C9"  # 8–9 × 8–9 only
+# Colors
+COL_YELLOW = "#FFE49C"  # Stable
+COL_BLUE   = "#C6D7EE"  # Complicated (cross 3–6)
+COL_GREEN  = "#CDEAC0"  # Complex bands (6–9 on either axis)
+COL_RED    = "#FFC9C9"  # Chaotic (8–9 × 8–9)
 ALPHA = 0.35
 
 def _rect(ax, x0, x1, y0, y1, color, alpha=ALPHA):
@@ -28,38 +28,46 @@ def make_stacey_figure(
     title: str = "Country Assessment",
 ):
     """
-    Stacey Matrix layout:
-      - Yellow: 0–3 on X and 0–3 on Y
-      - Blue:   (X 3–6 across Y 0–6) UNION (Y 3–6 across X 0–6)
-      - Green:  X 6–9 across Y 0–9  AND  Y 6–9 across X 0–9  (full bands)
-      - Red:    8–9 × 8–9 only (overrides green there)
+    Zones per your design:
+      - Yellow:  0–3 × 0–3
+      - Blue:    (X 3–6 over Y 0–6) UNION (Y 3–6 over X 0–6)
+      - Green:   X 6–9 across all Y  AND  Y 6–9 across all X
+      - Red:     8–9 × 8–9 (overrides green there)
     """
 
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.set_xlim(0, 9); ax.set_ylim(0, 9)
     ax.set_xticks(range(0, 10)); ax.set_yticks(range(0, 10))
 
-    # --- Draw zones in the right stacking order ---
-    # 1) Blue cross first (so green can overwrite above/beyond 6)
-    _rect(ax, 3, 6, 0, 6, COL_BLUE)  # vertical arm: X 3–6 over Y 0–6
-    _rect(ax, 0, 6, 3, 6, COL_BLUE)  # horizontal arm: Y 3–6 over X 0–6
+    # --- Background zones (draw in stacking order) ---
+    # Blue cross first
+    _rect(ax, 3, 6, 0, 6, COL_BLUE)   # vertical arm
+    _rect(ax, 0, 6, 3, 6, COL_BLUE)   # horizontal arm
 
-    # 2) Green full bands (6–9 on either axis)
-    _rect(ax, 6, 9, 0, 9, COL_GREEN)  # X >= 6 across all Y
-    _rect(ax, 0, 9, 6, 9, COL_GREEN)  # Y >= 6 across all X
+    # Full green bands for >=6 on either axis
+    _rect(ax, 6, 9, 0, 9, COL_GREEN)  # X >= 6
+    _rect(ax, 0, 9, 6, 9, COL_GREEN)  # Y >= 6
 
-    # 3) Red cap: only where both axes are 8–9
+    # Red cap overrides green where both axes are 8–9
     _rect(ax, 8, 9, 8, 9, COL_RED)
 
-    # 4) Yellow bottom-left (doesn't overlap blue)
+    # Yellow bottom-left
     _rect(ax, 0, 3, 0, 3, COL_YELLOW)
 
-    # Guideline grid at band edges
+    # Band edge guides
     for c in CUTS[1:-1]:
         ax.axvline(c, linestyle="--", linewidth=0.8, alpha=0.6)
         ax.axhline(c, linestyle="--", linewidth=0.8, alpha=0.6)
 
-    # --- Plot bubbles ---
+    # --- Zone labels (subtle) ---
+    label_kw = dict(fontsize=16, alpha=0.55, ha="center", va="center", weight="bold")
+    ax.text(1.5, 1.5, "STABLE", **label_kw)                 # yellow
+    ax.text(4.5, 4.5, "COMPLICATED", **label_kw)            # blue cross center
+    ax.text(7.0, 4.5, "COMPLEX", **label_kw)                # green (X≥6 band)
+    ax.text(4.5, 7.0, "COMPLEX", **label_kw)                # green (Y≥6 band)
+    ax.text(8.5, 8.5, "CHAOTIC", **label_kw)                # red cap
+
+    # --- Bubbles ---
     xs = df["Certainty_1to9"].astype(float).clip(0, 9)
     ys = df["Alignment_1to9"].astype(float).clip(0, 9)
     ms = df["MarketSize_Units"].astype(float).clip(lower=0)
