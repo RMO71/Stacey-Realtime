@@ -6,14 +6,14 @@ from stacey import make_stacey_figure
 
 st.set_page_config(page_title="Stacey Matrix – 1–9", layout="wide")
 
-st.title("Stacey Matrix – Real‑Time (1–9)")
-st.caption("Edit data live. Supports 1–9 scale, optional sub-scores, and auto‑converts older 0–10 data.")
+st.title("Stacey Matrix – Real-Time (1–9)")
+st.caption("Edit data live. Supports 1–9 scale, optional sub-scores, and auto-converts older 0–10 data.")
 
-required_base = ["Country/Market","MarketSize_Units","Segment/Notes"]
-pref_cols = ["Certainty_1to9","Alignment_1to9"]
-legacy_cols = ["Certainty_0to10","Alignment_0to10"]
-sub_cols_c = ["C_DataQuality","C_SupplyStability","C_RegPredictability"]
-sub_cols_a = ["A_StakeholderSupport","A_SustainabilityFit","A_CommercialAppetite"]
+required_base = ["Country/Market", "MarketSize_Units", "Segment/Notes"]
+pref_cols = ["Certainty_1to9", "Alignment_1to9"]
+legacy_cols = ["Certainty_0to10", "Alignment_0to10"]
+sub_cols_c = ["C_DataQuality", "C_SupplyStability", "C_RegPredictability"]
+sub_cols_a = ["A_StakeholderSupport", "A_SustainabilityFit", "A_CommercialAppetite"]
 
 with st.sidebar:
     st.header("Data source")
@@ -35,35 +35,74 @@ elif use_sample:
 else:
     df = pd.DataFrame(columns=required_base + pref_cols + sub_cols_c + sub_cols_a)
 
+# Normalize column names
+df.columns = df.columns.str.strip()
+df.columns = df.columns.str.replace(r'[^A-Za-z0-9]+', '_', regex=True).str.lower()
+
+# Mapping of expected names to normalized form
+expected_normalized = {
+    "country_market": "Country/Market",
+    "marketsize_units": "MarketSize_Units",
+    "segment_notes": "Segment/Notes",
+    "certainty_1to9": "Certainty_1to9",
+    "alignment_1to9": "Alignment_1to9"
+}
+
+# Backward compatibility: convert 0–10 → 1–9 if needed
 def _convert_0to10_to_1to9(series):
     return 1 + 8 * (series.astype(float) / 10.0)
 
-if "Certainty_1to9" not in df.columns and "Certainty_0to10" in df.columns:
-    df["Certainty_1to9"] = _convert_0to10_to_1to9(df["Certainty_0to10"]).round().clip(1,9).astype(int)
-if "Alignment_1to9" not in df.columns and "Alignment_0to10" in df.columns:
-    df["Alignment_1to9"] = _convert_0to10_to_1to9(df["Alignment_0to10"]).round().clip(1,9).astype(int)
+if "certainty_1to9" not in df.columns and "certainty_0to10" in df.columns:
+    df["certainty_1to9"] = _convert_0to10_to_1to9(df["certainty_0to10"]).round().clip(1, 9).astype(int)
+if "alignment_1to9" not in df.columns and "alignment_0to10" in df.columns:
+    df["alignment_1to9"] = _convert_0to10_to_1to9(df["alignment_0to10"]).round().clip(1, 9).astype(int)
 
-if all(c in df.columns for c in sub_cols_c):
-    df["Certainty_1to9"] = df[sub_cols_c].mean(axis=1).round().clip(1,9).astype(int)
-if all(c in df.columns for c in sub_cols_a):
-    df["Alignment_1to9"] = df[sub_cols_a].mean(axis=1).round().clip(1,9).astype(int)
+# If sub-scores exist, compute axis scores (simple mean; change weights if desired)
+if all(c.lower() in df.columns for c in [col.lower() for col in sub_cols_c]):
+    df["certainty_1to9"] = df[[c.lower() for c in sub_cols_c]].mean(axis=1).round().clip(1, 9).astype(int)
+if all(c.lower() in df.columns for c in [col.lower() for col in sub_cols_a]):
+    df["alignment_1to9"] = df[[c.lower() for c in sub_cols_a]].mean(axis=1).round().clip(1, 9).astype(int)
 
-col_order = [c for c in ["Country/Market"] + sub_cols_c + sub_cols_a + pref_cols + ["MarketSize_Units","Segment/Notes"] if c in df.columns]
+# Restore original names for display
+display_cols = []
+for col in df.columns:
+    for norm, orig in expected_normalized.items():
+        if col == norm:
+            display_cols.append(orig)
+            break
+    else:
+        display_cols.append(col)
+df.columns = display_cols
+
+col_order = [c for c in ["Country/Market"] + sub_cols_c + sub_cols_a + pref_cols + ["MarketSize_Units", "Segment/Notes"] if c in df.columns]
 df = df[col_order]
 
 st.subheader("Edit data (1–9)")
 edited = st.data_editor(df, num_rows="dynamic", use_container_width=True)
 edited.columns = edited.columns.str.strip()
 
-missing = ["Country/Market","MarketSize_Units"]
-missing += [c for c in pref_cols if c not in edited.columns]
+# Normalize edited columns for validation
+edited_norm = edited.copy()
+edited_norm.columns = edited_norm.columns.str.strip()
+edited_norm.columns = edited_norm.columns.str.replace(r'[^A-Za-z0-9]+', '_', regex=True).str.lower()
+
+missing = []
+for col in ["country_market", "marketsize_units"]:
+    if col not in edited_norm.columns:
+        missing.append(expected_normalized.get(col, col))
+
+for col in ["certainty_1to9", "alignment_1to9"]:
+    if col not in edited_norm.columns:
+        missing.append(expected_normalized.get(col, col))
+
 if missing:
     st.warning(f"Missing recommended columns: {missing}")
 else:
-    for col in [c for c in pref_cols if c in edited.columns]:
-        bad = edited[(edited[col] < 1) | (edited[col] > 9)]
-        if not bad.empty:
-            st.error(f"Values in {col} must be 1–9. Fix rows: {bad.index.tolist()}")
+    for col in ["certainty_1to9", "alignment_1to9"]:
+        if col in edited_norm.columns:
+            bad = edited[(edited_norm[col] < 1) | (edited_norm[col] > 9)]
+            if not bad.empty:
+                st.error(f"Values in {expected_normalized[col]} must be 1–9. Fix rows: {bad.index.tolist()}")
 
     fig = make_stacey_figure(
         edited, x_low=x_low, x_high=x_high, y_low=y_low, y_high=y_high, size_scale=size_scale
@@ -72,8 +111,4 @@ else:
     st.pyplot(fig, use_container_width=True)
 
     csv_buf = edited.to_csv(index=False).encode("utf-8")
-    st.download_button("Download edited CSV", csv_buf, file_name="stacey_data_1to9.csv", mime="text/csv")
-
-    img_buf = io.BytesIO()
-    fig.savefig(img_buf, format="png", dpi=180, bbox_inches="tight")
-    st.download_button("Download chart PNG", img_buf.getvalue(), file_name="stacey_matrix_1to9.png", mime="image/png")
+    st.download_button("Download_
