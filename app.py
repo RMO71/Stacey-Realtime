@@ -111,4 +111,4 @@ else:
     st.pyplot(fig, use_container_width=True)
 
     csv_buf = edited.to_csv(index=False).encode("utf-8")
-    st.download_button("Download_
+     st.download_button("Download chart PNG", img_buf.getvalue(), file_name="stacey_matrix_1to9.png", mime="image/png")
