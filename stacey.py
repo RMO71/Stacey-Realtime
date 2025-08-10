@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import pandas as pd
 
-# Zone colors
+# Zone colors (unchanged)
 COL_YELLOW = "#FFE49C"  # Stable
 COL_BLUE   = "#C6D7EE"  # Complicated (3–6 cross)
 COL_GREEN  = "#CDEAC0"  # Complex (>=6 on either axis)
-COL_RED    = "#FFC9C9"  # Chaotic (now 7–9 × 7–9)
-ALPHA = 0.35
+COL_RED    = "#FFC9C9"  # Chaotic
+ALPHA = 0.35            # same transparency as before
 
 def _rect(ax, x0, x1, y0, y1, color, alpha=ALPHA):
     ax.add_patch(
@@ -25,13 +25,12 @@ def make_stacey_figure(
     title: str = "Country Assessment",
 ):
     """
-    Stacey Matrix layout:
+    Stacey Matrix layout (final):
       - Axes fixed 0–9
       - Yellow:  0–3 × 0–3
-      - Blue:    (X 3–6 over Y 0–6) UNION (Y 3–6 over X 0–6)
+      - Blue:    (X 3–6 over Y 0–6)  UNION  (Y 3–6 over X 0–6)
       - Green:   X 6–9 across all Y  AND  Y 6–9 across all X
-      - Red:     7–9 × 7–9 (overlays green; drawn last)
-
+      - Red:     7–9 × 7–9  (drawn last to fully overlay green)
     Expects columns:
       'Country/Market', 'Certainty_1to9', 'Alignment_1to9', 'MarketSize_Units'
     """
@@ -42,26 +41,26 @@ def make_stacey_figure(
     ax.set_xticks(range(0, 10)); ax.set_yticks(range(0, 10))
 
     # --- Background zones (stacking order matters) ---
-    # 1) Blue cross (3–6 band to 6 on other axis)
+    # 1) Blue cross (3–6)
     _rect(ax, 3, 6, 0, 6, COL_BLUE)   # vertical arm
     _rect(ax, 0, 6, 3, 6, COL_BLUE)   # horizontal arm
 
-    # 2) Green full bands for >=6 on either axis (drawn before red)
+    # 2) Green areas (>=6 on either axis) — drawn before red
     _rect(ax, 6, 9, 0, 9, COL_GREEN)  # X >= 6
     _rect(ax, 0, 9, 6, 9, COL_GREEN)  # Y >= 6
 
-    # 3) Chaotic (expanded): 7–9 × 7–9 — draw last so it fully overlays green
+    # 3) Red chaotic zone (EXPANDED): 7–9 × 7–9 — draw LAST
     _rect(ax, 7, 9, 7, 9, COL_RED)
 
-    # 4) Stable bottom-left
+    # 4) Yellow stable zone
     _rect(ax, 0, 3, 0, 3, COL_YELLOW)
 
     # --- Zone labels (smaller, color-toned) ---
     label_kw = dict(fontsize=12, alpha=0.8, ha="center", va="center", weight="bold")
     ax.text(1.5, 1.5, "STABLE",       color="#c99d00", **label_kw)
     ax.text(4.5, 4.5, "COMPLICATED",  color="#2c4a7f", **label_kw)
-    ax.text(7.0, 4.5, "COMPLEX",      color="#2a662a", **label_kw)
-    ax.text(4.5, 7.0, "COMPLEX",      color="#2a662a", **label_kw)
+    ax.text(7.0, 4.5, "COMPLEX",      color="#2a662a", **label_kw)  # X≥6 band
+    ax.text(4.5, 7.0, "COMPLEX",      color="#2a662a", **label_kw)  # Y≥6 band
     ax.text(8.0, 8.0, "CHAOTIC",      color="#a12626", **label_kw)  # centered in 7–9 zone
 
     # --- Data & bubbles ---
@@ -78,7 +77,7 @@ def make_stacey_figure(
     for x, y, lab in zip(xs, ys, labels):
         ax.text(x, y + 0.22, lab, fontsize=8, ha="center", va="bottom")
 
-    # Axes labels/title and pale grid
+    # Axis labels/title and pale dotted grid
     ax.set_xlabel("CERTAINTY")
     ax.set_ylabel("ALIGNMENT")
     ax.set_title(title, pad=18)
