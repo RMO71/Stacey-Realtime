@@ -7,8 +7,8 @@ import pandas as pd
 COL_YELLOW = "#FFE49C"  # Stable
 COL_BLUE   = "#C6D7EE"  # Complicated (3–6 cross)
 COL_GREEN  = "#CDEAC0"  # Complex (>=6 on either axis)
-COL_RED    = "#FFC9C9"  # Chaotic
-ALPHA = 0.35            # same transparency as before
+COL_RED    = "#FFC9C9"  # Chaotic (7–9 × 7–9)
+ALPHA = 0.35            # transparency
 
 def _rect(ax, x0, x1, y0, y1, color, alpha=ALPHA):
     ax.add_patch(
@@ -25,12 +25,14 @@ def make_stacey_figure(
     title: str = "Country Assessment",
 ):
     """
-    Stacey Matrix layout (final):
+    Stacey Matrix (final):
       - Axes fixed 0–9
       - Yellow:  0–3 × 0–3
       - Blue:    (X 3–6 over Y 0–6)  UNION  (Y 3–6 over X 0–6)
       - Green:   X 6–9 across all Y  AND  Y 6–9 across all X
-      - Red:     7–9 × 7–9  (drawn last to fully overlay green)
+      - Red:     7–9 × 7–9 (drawn last to fully overlay green)
+      - Overlap handling: bubbles sharing the same (x,y) are spread in a small ring
+
     Expects columns:
       'Country/Market', 'Certainty_1to9', 'Alignment_1to9', 'MarketSize_Units'
     """
@@ -63,19 +65,41 @@ def make_stacey_figure(
     ax.text(4.5, 7.0, "COMPLEX",      color="#2a662a", **label_kw)  # Y≥6 band
     ax.text(8.0, 8.0, "CHAOTIC",      color="#a12626", **label_kw)  # centered in 7–9 zone
 
-    # --- Data & bubbles ---
+    # --- Data & bubbles (with overlap handling) ---
     xs = df["Certainty_1to9"].astype(float).clip(0, 9)
     ys = df["Alignment_1to9"].astype(float).clip(0, 9)
     ms = df["MarketSize_Units"].astype(float).clip(lower=0)
-    labels = df["Country/Market"].astype(str).tolist()
+    labels = df["Country/Market"].astype(str)
 
-    # Bubble sizes (sqrt scaling + floor)
-    sizes = [max(50, math.sqrt(v) * size_scale) for v in ms]
-    ax.scatter(xs, ys, s=sizes, alpha=0.65, edgecolors="black", linewidths=0.5)
+    base = pd.DataFrame({"x": xs.values, "y": ys.values, "m": ms.values, "lab": labels.values})
 
-    # Country names ABOVE bubbles
-    for x, y, lab in zip(xs, ys, labels):
-        ax.text(x, y + 0.22, lab, fontsize=8, ha="center", va="bottom")
+    # Group exact (x,y) duplicates
+    groups = base.groupby(["x", "y"], sort=False)
+
+    # Ring radius for spreading duplicates (axis units)
+    R_MIN, R_MAX = 0.12, 0.22  # gentle, readable
+    for (x0, y0), g in groups:
+        k = len(g)
+        r = R_MIN if k == 1 else min(R_MAX, R_MIN + 0.03 * (k - 1))
+
+        if k == 1:
+            row = g.iloc[0]
+            size = max(50, math.sqrt(row["m"]) * size_scale)
+            ax.scatter([x0], [y0], s=[size], alpha=0.65, edgecolors="black", linewidths=0.5)
+            ax.text(x0, y0 + 0.22, str(row["lab"]), fontsize=8, ha="center", va="bottom")
+            continue
+
+        # Spread duplicates evenly around the point
+        angles = [2 * math.pi * i / k for i in range(k)]
+        for ang, (_, row) in zip(angles, g.iterrows()):
+            x = x0 + r * math.cos(ang)
+            y = y0 + r * math.sin(ang)
+            # Clamp to bounds to avoid labels getting cut off
+            x = max(0, min(9, x))
+            y = max(0, min(9, y))
+            size = max(50, math.sqrt(row["m"]) * size_scale)
+            ax.scatter([x], [y], s=[size], alpha=0.65, edgecolors="black", linewidths=0.5)
+            ax.text(x, y + 0.22, str(row["lab"]), fontsize=8, ha="center", va="bottom")
 
     # Axis labels/title and pale dotted grid
     ax.set_xlabel("CERTAINTY")
