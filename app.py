@@ -1,3 +1,6 @@
+import importlib, stacey
+importlib.reload(stacey)
+from stacey import make_stacey_figure
 import io
 import numpy as np
 import streamlit as st
